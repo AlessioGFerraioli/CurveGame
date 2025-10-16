@@ -1,5 +1,6 @@
 import pygame
 import math
+import random
 
 pygame.init()
 
@@ -16,6 +17,12 @@ def normalizza(x, y):
     '''
     return x/norm(x, y), y/norm(x, y) 
 
+def trova_altra_componente(x, modulo=1):
+    '''
+    serve per trovare y avendo la x (o viceversa) intese come coordinate di un versore
+    '''
+    return math.sqrt(modulo - x**2)
+
 def spostamento(s, nx, ny, x, y):
     '''
     prende coordinate in ingresso e restituisce posizione aggiornata in base a uno spostamento di modulo s e versori nx ny
@@ -29,14 +36,13 @@ def spostamento(s, nx, ny, x, y):
     OUTPUT:
         x e y : posizione finale        
     '''  
-    if nx > 1 or nx < -1 or ny > 1 or ny < -1:
-        print("versori non tra -1 e 1!")
+    assert  not (nx > 1 or nx < -1 or ny > 1 or ny < -1)
+
     norma = norm(nx, ny)
     x += nx*s
     y += ny*s
     return x, y
     
-
 def ruota_versore(theta, nx0, ny0):
     '''
     funzione per ruotare i versori
@@ -54,9 +60,11 @@ def ruota_versore(theta, nx0, ny0):
         nx ny : versori ruotati
     '''
     theta = math.radians(theta)
-    nx, ny = normalizza(nx0, ny0)   #normalizzo per sicurezza
     nx = nx0 * math.cos(theta) - ny0 * math.sin(theta)
-    ny = nx0 * math.sin(theta) - ny0 * math.cos(theta)
+    ny = nx0 * math.sin(theta) + ny0 * math.cos(theta)
+    #the norm is 1 entro un errore di calcolo numerico
+    error = 1e-5
+    assert abs(norm(nx,ny) - 1) < error
     return nx, ny
 
 def disegna_versore(screen, x, y, nx, ny, lunghezza=40, colore=(255,0,0)):
@@ -82,6 +90,17 @@ def disegna_versore(screen, x, y, nx, ny, lunghezza=40, colore=(255,0,0)):
     pygame.draw.line(screen, colore, (x_punta, y_punta), (sinistra_x, sinistra_y), 2)
     pygame.draw.line(screen, colore, (x_punta, y_punta), (destra_x, destra_y), 2)
 
+def touches_border(screen, x, y, r):
+    '''
+    controlla se l'oggetto tocca il bordo
+    o meglio lo considera come un cerchio centrato in x y e di raggio r
+    per un cerchio come in questo gioco va bene, per figure piu complesse le includi in un cerchio - in altri casi potrebbe servire una funzione che usa rettangolo o figure piu complesse
+    '''
+    return x - r <= 0 or x + r >= screen.get_width() or y - r <= 0 or y + r >= screen.get_height()
+
+
+
+
 
 screen = pygame.display.set_mode((640,640)) # create the canvas 
 
@@ -89,11 +108,20 @@ delta_time = 0.1
 
 font = pygame.font.Font(None, size=30)
 
-# initializing the parameter 
-x = 0  
-y = 30 
-nx = 0.5  # versori direzione del moviemnto
-ny = 0.5
+# initializing the parameters 
+
+# bounding lo uso per non  far partire la palla troppo vicvina al bordo
+bounding = screen.get_width()*0.05
+# starting position and direction of the ball
+x = random.uniform(bounding, screen.get_width() - bounding)
+y = random.uniform(bounding, screen.get_height() - bounding)
+nx = random.uniform(-1, 1)  # versori direzione del moviemnto
+ny = trova_altra_componente(nx)
+# aspetto della palla
+radius = 20
+# movimento della palla
+velocita = 10
+rotazione = 1
 
 clock = pygame.time.Clock()  
 
@@ -107,23 +135,27 @@ while running:
 
     screen.fill((0,0,0)) # color the background
 
-    pygame.draw.circle(screen, "red", (x,y), 20)
+    pygame.draw.circle(screen, "red", (x,y), radius)
     disegna_versore(screen, x, y, nx, ny)
 
     target = pygame.Rect(300, 0, 160, 290)
 
-
     # fai ruotare se premuto tasto d o a 
     if turn_left: 
-        nx, ny = ruota_versore(10, nx, ny) 
+        nx, ny = ruota_versore(rotazione, nx, ny) 
+    if turn_right: 
+        nx, ny = ruota_versore(-rotazione, nx, ny) 
 
-    x, y =  spostamento(10 * delta_time, nx, ny, x, y)   #aggiorna la posizione del cerchio
+    x, y =  spostamento(velocita * delta_time, nx, ny, x, y)   #aggiorna la posizione del cerchio
 
-    print(f"nx: {nx}, ny: {ny}")
-    text = font.render("Hello!", True, (255,255,0))
-
-    screen.blit(text, (300,100))
-
+    if touches_border(screen, x, y, radius):
+        text = font.render("YOU LOSE", True, (255,255,0))
+        screen.blit(text, (300,100))
+        # DEVE SCOMPARIRE IL CERCHIO
+        velocita = 0 # nonsi muove piu
+        #lo spostiamo fuori dalle palle
+        x = -100
+        y = -100  
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT: 
