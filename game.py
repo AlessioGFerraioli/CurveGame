@@ -4,6 +4,10 @@ import random
 
 pygame.init()
 
+def distance(x1, y1, x2, y2):
+    '''euclidean distance between (x1,y1) and (x2,y2)'''
+    return math.sqrt((x1 - x2)**2 + (y1 - y2)**2)
+
 
 def norm(x, y): 
     '''
@@ -90,7 +94,7 @@ def disegna_versore(screen, x, y, nx, ny, lunghezza=40, colore=(255,0,0)):
     pygame.draw.line(screen, colore, (x_punta, y_punta), (sinistra_x, sinistra_y), 2)
     pygame.draw.line(screen, colore, (x_punta, y_punta), (destra_x, destra_y), 2)
 
-def touches_border(screen, x, y, r):
+def tocca_bordo(screen, x, y, r):
     '''
     controlla se l'oggetto tocca il bordo
     o meglio lo considera come un cerchio centrato in x y e di raggio r
@@ -98,8 +102,25 @@ def touches_border(screen, x, y, r):
     '''
     return x - r <= 0 or x + r >= screen.get_width() or y - r <= 0 or y + r >= screen.get_height()
 
+def tocca_traccia(screen, player_x, player_y, raggio_player, traccia, raggio_traccia):
+    #if distanza tra xy player e xy traccia < raggio_player - raggio traccia
+    for point in traccia:
+        point_x, point_y = point
+        if distance(player_x, player_y, point_x, point_y) <= raggio_player - raggio_traccia:
+            return True
+    return False
 
-
+def game_over(screen, x, y, velocita, coordinate_traccia):
+    text = font.render("YOU LOSE", True, (255,255,0))
+    screen.blit(text, (300,100))
+    # DEVE SCOMPARIRE IL CERCHIO
+    velocita = 0 # nonsi muove piu
+    # lo spostiamo fuori dalle palle
+    x = -100
+    y = -100
+    # scompare anche la traccia
+    coordinate_traccia = []
+    return x, y, velocita, coordinate_traccia  
 
 
 screen = pygame.display.set_mode((640,640)) # create the canvas 
@@ -118,24 +139,35 @@ y = random.uniform(bounding, screen.get_height() - bounding)
 nx = random.uniform(-1, 1)  # versori direzione del moviemnto
 ny = trova_altra_componente(nx)
 # aspetto della palla
-radius = 20
+player_radius = 20
 # movimento della palla
-velocita = 10
-rotazione = 1
+velocita = 20
+rotazione = 2
+
+
+raggio_traccia = 3
+tempo_traccia_on = 3000 # millisecondi
+tempo_traccia_off = 800
+intervallo_traccia = tempo_traccia_on    # intervallo è quello che uso per confrontarlo col tempo corrente- partiamo con on cioè la traccia inizia immediatamente quando inizia il gioco
 
 clock = pygame.time.Clock()  
 
 turn_left = False    
 turn_right = False
 
+disegna_traccia = True   #per segnalare se dobbiamo disegnare la traccia [parte la traccia dall'inizio del gioco]
+
+coordinate_traccia = []
 
 # main loop of the game
 running = True
-while running: 
+ultimo_toggle = pygame.time.get_ticks()  #salvo l'ultimo toggle
 
+while running: 
+    print(ultimo_toggle)
     screen.fill((0,0,0)) # color the background
 
-    pygame.draw.circle(screen, "red", (x,y), radius)
+    pygame.draw.circle(screen, "red", (x,y), player_radius)
     disegna_versore(screen, x, y, nx, ny)
 
     target = pygame.Rect(300, 0, 160, 290)
@@ -148,14 +180,25 @@ while running:
 
     x, y =  spostamento(velocita * delta_time, nx, ny, x, y)   #aggiorna la posizione del cerchio
 
-    if touches_border(screen, x, y, radius):
-        text = font.render("YOU LOSE", True, (255,255,0))
-        screen.blit(text, (300,100))
-        # DEVE SCOMPARIRE IL CERCHIO
-        velocita = 0 # nonsi muove piu
-        #lo spostiamo fuori dalle palle
-        x = -100
-        y = -100  
+    if disegna_traccia:
+        coordinate_traccia.append((x - nx * player_radius, y - ny * player_radius))
+
+    for coordinate in coordinate_traccia:     # disegna la traccia
+        pygame.draw.circle(screen, "red", coordinate, raggio_traccia)
+    
+
+    if tocca_bordo(screen, x, y, player_radius) or tocca_traccia(screen, x, y, player_radius, coordinate_traccia, raggio_traccia):
+        x, y, velocita, coordinate_traccia = game_over(screen, x, y, velocita, coordinate_traccia)
+
+    tempo_attuale = pygame.time.get_ticks()
+    if tempo_attuale - ultimo_toggle >= intervallo_traccia:
+        if disegna_traccia:
+            intervallo_traccia = tempo_traccia_off
+        else:
+            intervallo_traccia = tempo_traccia_on
+        disegna_traccia = not disegna_traccia
+        ultimo_toggle = tempo_attuale
+
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT: 
@@ -164,12 +207,14 @@ while running:
             if event.key == pygame.K_d: #se premuto tasto "d"
                 turn_right = True       
             if event.key == pygame.K_a: # se premuto tasto "a"
-                turn_left = True       
+                turn_left = True        
         if event.type == pygame.KEYUP:   
             if event.key == pygame.K_d: # se rilasciato tasto "d"
                 turn_right = False  
             if event.key == pygame.K_a: # se rilasciato tasto "a"
                 turn_left = False   
+
+            
 
 
     pygame.display.flip()   # mostra tutto quello che c'è da mostarre
